@@ -7,6 +7,7 @@ import (
 	"github.com/hecker-01/kotatsu-syncserver-go/middleware"
 )
 
+// PlayerRoutes configures /api/player endpoints. All routes require authentication.
 func PlayerRoutes(r chi.Router) {
 	controller := controllers.NewPlayerController()
 	r.Use(middleware.RequireAuth)

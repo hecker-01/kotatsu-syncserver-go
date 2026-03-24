@@ -1,3 +1,5 @@
+// Package handlers contains legacy HTTP handlers that directly implement
+// request handling logic. New code should use the controllers/ + services/ pattern.
 package handlers
 
 import (
@@ -13,6 +15,8 @@ import (
 	"github.com/hecker-01/kotatsu-syncserver-go/logger"
 )
 
+// jwtSecret retrieves the JWT signing secret from environment.
+// Exits if JWT_SECRET is not configured.
 func jwtSecret() []byte {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
@@ -22,11 +26,14 @@ func jwtSecret() []byte {
 	return []byte(secret)
 }
 
+// RegisterRequest holds the JSON payload for user registration.
 type RegisterRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
+// Register is a legacy handler for user registration.
+// New code should use controllers.AuthController.Register instead.
 func Register(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -53,11 +60,14 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("User created"))
 }
 
+// LoginRequest holds the JSON payload for user login.
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
+// Login is a legacy handler for user authentication.
+// New code should use controllers.AuthController.Login instead.
 func Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

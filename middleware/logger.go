@@ -7,6 +7,9 @@ import (
 	"github.com/hecker-01/kotatsu-syncserver-go/logger"
 )
 
+// StructuredLogger is middleware that logs HTTP requests with method, path,
+// status code, duration, and client IP. Log level adjusts based on status:
+// 5xx → error, 4xx → warn, others → info.
 func StructuredLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -32,6 +35,7 @@ func StructuredLogger(next http.Handler) http.Handler {
 	})
 }
 
+// responseWriter wraps http.ResponseWriter to capture the status code.
 type responseWriter struct {
 	http.ResponseWriter
 	status int

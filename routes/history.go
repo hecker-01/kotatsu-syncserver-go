@@ -7,6 +7,7 @@ import (
 	"github.com/hecker-01/kotatsu-syncserver-go/middleware"
 )
 
+// HistoryRoutes configures /api/history endpoints. All routes require authentication.
 func HistoryRoutes(r chi.Router) {
 	controller := controllers.NewHistoryController()
 	r.Use(middleware.RequireAuth)

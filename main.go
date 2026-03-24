@@ -1,3 +1,6 @@
+// Package main provides the entry point for the Kotatsu Sync Server HTTP API.
+// It configures environment variables, initializes database and logging,
+// sets up middleware and routes, then starts the HTTP server.
 package main
 
 import (
@@ -17,6 +20,9 @@ import (
 	"github.com/hecker-01/kotatsu-syncserver-go/routes"
 )
 
+// ensureRequiredEnv validates that all required environment variables are set.
+// It will attempt to load from .env if any are missing. Exits with code 1 if
+// any required variables remain unset after loading .env.
 func ensureRequiredEnv(required []string) {
 	missing := make([]string, 0)
 	for _, key := range required {

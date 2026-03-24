@@ -1,3 +1,5 @@
+// Package db provides database initialization and a global connection pool
+// for MySQL database access throughout the application.
 package db
 
 import (
@@ -9,12 +11,16 @@ import (
 	"github.com/hecker-01/kotatsu-syncserver-go/logger"
 )
 
+// DB is the global database connection pool used by services.
 var DB *sql.DB
 
 func getEnv(key string) string {
 	return os.Getenv(key)
 }
 
+// Init establishes the database connection using environment variables
+// (DB_HOST, DB_NAME, DB_USER, DB_PASS, DB_PORT) and configures the connection pool.
+// Exits with code 1 if connection fails or required variables are missing.
 func Init() {
 	host := getEnv("DB_HOST")
 	name := getEnv("DB_NAME")

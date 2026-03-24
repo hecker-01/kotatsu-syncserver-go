@@ -7,6 +7,7 @@ import (
 	"github.com/hecker-01/kotatsu-syncserver-go/middleware"
 )
 
+// UserRoutes configures /api/users endpoints. All routes require authentication.
 func UserRoutes(r chi.Router) {
 	controller := controllers.NewUserController()
 

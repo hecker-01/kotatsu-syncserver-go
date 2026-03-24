@@ -1,3 +1,7 @@
+// Package logger provides structured logging with configurable outputs (console, file),
+// log rotation via lumberjack, custom log levels (trace through fatal), and colorized
+// text output. It wraps Go's standard slog package with additional features for HTTP
+// access logging and environment-driven configuration.
 package logger
 
 import (

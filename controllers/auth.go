@@ -1,3 +1,6 @@
+// Package controllers provides HTTP handlers that translate between HTTP requests/responses
+// and service-layer business logic. Controllers handle JSON parsing, error mapping to status codes,
+// and response formatting.
 package controllers
 
 import (
@@ -10,10 +13,12 @@ import (
 	"github.com/hecker-01/kotatsu-syncserver-go/utils"
 )
 
+// AuthController handles authentication endpoints (register, login).
 type AuthController struct {
 	authService *services.AuthService
 }
 
+// NewAuthController creates a new auth controller with initialized service.
 func NewAuthController() *AuthController {
 	return &AuthController{authService: services.NewAuthService()}
 }
@@ -23,6 +28,8 @@ type authRequest struct {
 	Password string `json:"password"`
 }
 
+// Register handles POST /api/auth/register. Creates a new user account with email and password.
+// Returns 201 on success, 400 for invalid input, 409 if email already exists.
 func (c *AuthController) Register(w http.ResponseWriter, r *http.Request) {
 	var req authRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -47,6 +54,8 @@ func (c *AuthController) Register(w http.ResponseWriter, r *http.Request) {
 	utils.WriteJSON(w, http.StatusCreated, map[string]string{"message": "User created"})
 }
 
+// Login handles POST /api/auth/login. Authenticates user and returns a JWT token.
+// Returns 200 with token on success, 400 for invalid input, 401 for invalid credentials.
 func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 	var req authRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

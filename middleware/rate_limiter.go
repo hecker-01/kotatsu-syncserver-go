@@ -10,11 +10,15 @@ import (
 	"github.com/hecker-01/kotatsu-syncserver-go/utils"
 )
 
+// rateLimitEntry tracks request count and reset time for an IP address.
 type rateLimitEntry struct {
 	count   int
 	resetAt time.Time
 }
 
+// NewRateLimiter creates middleware that limits requests per IP address.
+// Returns 429 with Retry-After header when limit is exceeded.
+// maxRequests sets the maximum number of requests allowed within the time window.
 func NewRateLimiter(maxRequests int, window time.Duration) func(http.Handler) http.Handler {
 	var (
 		mu      sync.Mutex
@@ -53,6 +57,8 @@ func NewRateLimiter(maxRequests int, window time.Duration) func(http.Handler) ht
 	}
 }
 
+// clientIP extracts the client IP address from the request.
+// Checks X-Forwarded-For header first, falls back to RemoteAddr.
 func clientIP(r *http.Request) string {
 	xff := r.Header.Get("X-Forwarded-For")
 	if xff != "" {
