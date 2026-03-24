@@ -7,9 +7,8 @@ import (
 	"github.com/hecker-01/kotatsu-syncserver-go/middleware"
 )
 
-func UserRoutes(r chi.Router) {
-	controller := controllers.NewUserController()
-
+func PlayerRoutes(r chi.Router) {
+	controller := controllers.NewPlayerController()
 	r.Use(middleware.RequireAuth)
-	r.Get("/me", controller.Me)
+	r.Get("/", controller.List)
 }

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -60,12 +61,16 @@ func main() {
 	r.Use(middleware.StructuredLogger)
 	r.Use(chimiddleware.Recoverer)
 
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Welcome to Kotatsu Sync Server"))
+	})
+
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("OK"))
 	})
 
 	apiRouter := chi.NewRouter()
-	// Add API-wide middleware here (for example, rate limiting).
+	apiRouter.Use(middleware.NewRateLimiter(100, 5*time.Minute))
 	routes.RegisterAPIRoutes(apiRouter)
 	r.Mount("/api", apiRouter)
 
