@@ -11,10 +11,9 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/hecker-01/kotatsu-syncserver-go/db"
-	"github.com/hecker-01/kotatsu-syncserver-go/handlers"
 	"github.com/hecker-01/kotatsu-syncserver-go/logger"
 	"github.com/hecker-01/kotatsu-syncserver-go/middleware"
-	authmw "github.com/hecker-01/kotatsu-syncserver-go/middleware"
+	"github.com/hecker-01/kotatsu-syncserver-go/routes"
 )
 
 func ensureRequiredEnv(required []string) {
@@ -65,13 +64,10 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 
-	r.Post("/register", handlers.Register)
-	r.Post("/login", handlers.Login)
-
-	r.Group(func(r chi.Router) {
-		r.Use(authmw.RequireAuth)
-		r.Get("/me", handlers.Me)
-	})
+	apiRouter := chi.NewRouter()
+	// Add API-wide middleware here (for example, rate limiting).
+	routes.RegisterAPIRoutes(apiRouter)
+	r.Mount("/api", apiRouter)
 
 	port := os.Getenv("PORT")
 	if port == "" {

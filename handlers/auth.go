@@ -95,8 +95,3 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	logger.Info("user logged in", "user_id", id)
 	json.NewEncoder(w).Encode(map[string]string{"token": tokenString})
 }
-
-func Me(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("user_id")
-	json.NewEncoder(w).Encode(map[string]interface{}{"user_id": userID})
-}
