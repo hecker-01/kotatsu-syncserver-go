@@ -75,7 +75,7 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = "9292"
 	}
 
 	addr := ":" + strings.TrimPrefix(port, ":")
