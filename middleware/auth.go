@@ -2,12 +2,12 @@ package middleware
 
 import (
 	"context"
-	"log/slog"
 	"net/http"
 	"os"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/hecker-01/kotatsu-syncserver-go/logger"
 )
 
 func RequireAuth(next http.Handler) http.Handler {
@@ -26,7 +26,7 @@ func RequireAuth(next http.Handler) http.Handler {
 		})
 
 		if err != nil || !token.Valid {
-			slog.Warn("invalid token", "ip", r.RemoteAddr)
+			logger.Warn("invalid token", "ip", r.RemoteAddr)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -11,12 +10,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/hecker-01/kotatsu-syncserver-go/db"
+	"github.com/hecker-01/kotatsu-syncserver-go/logger"
 )
 
 func jwtSecret() []byte {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		slog.Error("JWT_SECRET is not set")
+		logger.Error("JWT_SECRET is not set")
 		os.Exit(1)
 	}
 	return []byte(secret)
@@ -36,19 +36,19 @@ func Register(w http.ResponseWriter, r *http.Request) {
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		slog.Error("bcrypt failed", "error", err)
+		logger.Error("bcrypt failed", "error", err)
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
 
 	_, err = db.DB.Exec("INSERT INTO users (email, password_hash) VALUES (?, ?)", req.Email, string(hash))
 	if err != nil {
-		slog.Warn("register failed", "email", req.Email, "error", err)
+		logger.Warn("register failed", "email", req.Email, "error", err)
 		http.Error(w, "Email already exists", http.StatusConflict)
 		return
 	}
 
-	slog.Info("user registered", "email", req.Email)
+	logger.Info("user registered", "email", req.Email)
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte("User created"))
 }
@@ -69,13 +69,13 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	var hash string
 	err := db.DB.QueryRow("SELECT id, password_hash FROM users WHERE email = ?", req.Email).Scan(&id, &hash)
 	if err != nil {
-		slog.Warn("login attempt failed", "email", req.Email)
+		logger.Warn("login attempt failed", "email", req.Email)
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.Password)); err != nil {
-		slog.Warn("wrong password", "email", req.Email)
+		logger.Warn("wrong password", "email", req.Email)
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
@@ -87,12 +87,12 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 	tokenString, err := token.SignedString(jwtSecret())
 	if err != nil {
-		slog.Error("token signing failed", "error", err)
+		logger.Error("token signing failed", "error", err)
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
 
-	slog.Info("user logged in", "user_id", id)
+	logger.Info("user logged in", "user_id", id)
 	json.NewEncoder(w).Encode(map[string]string{"token": tokenString})
 }
 

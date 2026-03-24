@@ -3,10 +3,10 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"log/slog"
 	"os"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/hecker-01/kotatsu-syncserver-go/logger"
 )
 
 var DB *sql.DB
@@ -26,7 +26,7 @@ func Init() {
 	}
 
 	if host == "" || name == "" || user == "" || pass == "" {
-		slog.Error("DB_HOST, DB_NAME, DB_USER, and DB_PASS must be set")
+		logger.Error("DB_HOST, DB_NAME, DB_USER, and DB_PASS must be set")
 		os.Exit(1)
 	}
 
@@ -35,17 +35,17 @@ func Init() {
 	var err error
 	DB, err = sql.Open("mysql", dsn)
 	if err != nil {
-		slog.Error("failed to open database", "error", err)
+		logger.Error("failed to open database", "error", err)
 		os.Exit(1)
 	}
 
 	if err = DB.Ping(); err != nil {
-		slog.Error("failed to ping database", "error", err)
+		logger.Error("failed to ping database", "error", err)
 		os.Exit(1)
 	}
 
 	DB.SetMaxOpenConns(25)
 	DB.SetMaxIdleConns(5)
 
-	slog.Info("database connected")
+	logger.Info("database connected")
 }

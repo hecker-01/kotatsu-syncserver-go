@@ -7,12 +7,17 @@
 *.so.*
 *.dylib
 kotatsu-syncserver-go
+api
 
 # Test binary, built with `go test -c`
 *.test
 
 # Output of the go coverage tool
 *.out
+
+# Logs
+logs/
+*.log
 
 # Dependency directories
 vendor/

@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"log/slog"
+	"github.com/hecker-01/kotatsu-syncserver-go/logger"
 )
 
 func StructuredLogger(next http.Handler) http.Handler {
@@ -14,7 +14,15 @@ func StructuredLogger(next http.Handler) http.Handler {
 		ww := &responseWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(ww, r)
 
-		slog.Info("request",
+		// Determine log level based on status code
+		level := logger.LevelInfo
+		if ww.status >= 500 {
+			level = logger.LevelError
+		} else if ww.status >= 400 {
+			level = logger.LevelWarn
+		}
+
+		logger.AccessLog(level, "request",
 			"method", r.Method,
 			"path", r.URL.Path,
 			"status", ww.status,
