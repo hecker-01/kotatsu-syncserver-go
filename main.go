@@ -71,10 +71,6 @@ func main() {
 		w.Write([]byte("Welcome to Kotatsu Sync Server"))
 	})
 
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("OK"))
-	})
-
 	apiRouter := chi.NewRouter()
 	apiRouter.Use(middleware.NewRateLimiter(100, 5*time.Minute))
 	routes.RegisterAPIRoutes(apiRouter)
