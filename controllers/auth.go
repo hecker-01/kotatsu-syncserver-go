@@ -9,11 +9,12 @@ import (
 	"net/http"
 
 	"github.com/hecker-01/kotatsu-syncserver-go/logger"
+	"github.com/hecker-01/kotatsu-syncserver-go/models"
 	"github.com/hecker-01/kotatsu-syncserver-go/services"
 	"github.com/hecker-01/kotatsu-syncserver-go/utils"
 )
 
-// AuthController handles authentication endpoints (register, login).
+// AuthController handles the combined authentication endpoint.
 type AuthController struct {
 	authService *services.AuthService
 }
@@ -23,60 +24,30 @@ func NewAuthController() *AuthController {
 	return &AuthController{authService: services.NewAuthService()}
 }
 
-type authRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-// Register handles POST /api/auth/register. Creates a new user account with email and password.
-// Returns 201 on success, 400 for invalid input, 409 if email already exists.
-func (c *AuthController) Register(w http.ResponseWriter, r *http.Request) {
-	var req authRequest
+// Auth handles POST /auth. Combined login/register endpoint.
+// If user exists: authenticates with password.
+// If user doesn't exist and registration allowed: creates new account.
+// Returns 200 with token on success, 400 with plain text "Wrong password" on auth failure.
+func (c *AuthController) Auth(w http.ResponseWriter, r *http.Request) {
+	var req models.AuthRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request")
+		http.Error(w, "Wrong password", http.StatusBadRequest)
 		return
 	}
 
-	err := c.authService.Register(services.RegisterInput{Email: req.Email, Password: req.Password})
+	token, err := c.authService.Authenticate(req.Email, req.Password)
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrInvalidInput):
-			utils.WriteError(w, http.StatusBadRequest, "Email and password are required")
-		case errors.Is(err, services.ErrEmailExists):
-			utils.WriteError(w, http.StatusConflict, "Email already exists")
+			http.Error(w, "Wrong password", http.StatusBadRequest)
+		case errors.Is(err, services.ErrWrongPassword):
+			http.Error(w, "Wrong password", http.StatusBadRequest)
 		default:
-			logger.Error("register failed", "error", err)
-			utils.WriteError(w, http.StatusInternalServerError, "Server error")
+			logger.Error("auth failed", "error", err)
+			http.Error(w, "Wrong password", http.StatusBadRequest)
 		}
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusCreated, map[string]string{"message": "User created"})
-}
-
-// Login handles POST /api/auth/login. Authenticates user and returns a JWT token.
-// Returns 200 with token on success, 400 for invalid input, 401 for invalid credentials.
-func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
-	var req authRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.WriteError(w, http.StatusBadRequest, "Invalid request")
-		return
-	}
-
-	token, userID, err := c.authService.Login(services.LoginInput{Email: req.Email, Password: req.Password})
-	if err != nil {
-		switch {
-		case errors.Is(err, services.ErrInvalidInput):
-			utils.WriteError(w, http.StatusBadRequest, "Email and password are required")
-		case errors.Is(err, services.ErrInvalidCredentials):
-			utils.WriteError(w, http.StatusUnauthorized, "Invalid credentials")
-		default:
-			logger.Error("login failed", "error", err)
-			utils.WriteError(w, http.StatusInternalServerError, "Server error")
-		}
-		return
-	}
-
-	logger.Info("user logged in", "user_id", userID)
-	utils.WriteJSON(w, http.StatusOK, map[string]string{"token": token})
+	utils.WriteJSON(w, http.StatusOK, models.AuthResponse{Token: token})
 }

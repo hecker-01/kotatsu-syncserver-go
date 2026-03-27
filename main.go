@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -18,48 +17,30 @@ import (
 	"github.com/hecker-01/kotatsu-syncserver-go/logger"
 	"github.com/hecker-01/kotatsu-syncserver-go/middleware"
 	"github.com/hecker-01/kotatsu-syncserver-go/routes"
+	"github.com/hecker-01/kotatsu-syncserver-go/utils"
 )
 
-// ensureRequiredEnv validates that all required environment variables are set.
-// It will attempt to load from .env if any are missing. Exits with code 1 if
-// any required variables remain unset after loading .env.
-func ensureRequiredEnv(required []string) {
-	missing := make([]string, 0)
-	for _, key := range required {
-		if os.Getenv(key) == "" {
-			missing = append(missing, key)
-		}
-	}
-
-	if len(missing) == 0 {
-		return
-	}
-
-	if err := godotenv.Load(); err != nil {
-		fmt.Fprintf(os.Stderr, "missing required env vars: %s; also failed to load .env: %v\n", strings.Join(missing, ", "), err)
-		os.Exit(1)
-	}
-
-	stillMissing := make([]string, 0)
-	for _, key := range required {
-		if os.Getenv(key) == "" {
-			stillMissing = append(stillMissing, key)
-		}
-	}
-
-	if len(stillMissing) > 0 {
-		fmt.Fprintf(os.Stderr, "required env vars are missing after loading .env: %s\n", strings.Join(stillMissing, ", "))
-		os.Exit(1)
-	}
-}
-
 func main() {
-	// Load .env early so optional values like PORT are available.
+	// Load .env early so all configuration values are available.
 	_ = godotenv.Load()
 
-	ensureRequiredEnv([]string{"DB_HOST", "DB_NAME", "DB_USER", "DB_PASS", "JWT_SECRET"})
+	// Load and validate configuration from environment variables.
+	cfg, err := utils.LoadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "configuration error: %v\n", err)
+		os.Exit(1)
+	}
 
 	logger.Init()
+
+	// Auto-initialize database if DATABASE_ROOT_PASSWORD is set
+	// This is useful for Docker Compose where database should be created automatically
+	if created, err := db.InitializeDatabase(cfg); err != nil {
+		logger.L.Error("failed to initialize database", "error", err)
+		os.Exit(1)
+	} else if created {
+		logger.L.Info("database created successfully")
+	}
 
 	db.Init()
 
@@ -67,20 +48,16 @@ func main() {
 	r.Use(middleware.StructuredLogger)
 	r.Use(chimiddleware.Recoverer)
 
+	// Health check at root - returns plain text "Alive"
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Welcome to Kotatsu Sync Server"))
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Write([]byte("Alive"))
 	})
 
-	apiRouter := chi.NewRouter()
-	apiRouter.Use(middleware.NewRateLimiter(100, 5*time.Minute))
-	routes.RegisterAPIRoutes(apiRouter)
-	r.Mount("/api", apiRouter)
+	// Register all routes at root level (matching Kotatsu API structure)
+	routes.RegisterRoutes(r)
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "9292"
-	}
-
+	port := fmt.Sprintf("%d", cfg.Port)
 	addr := ":" + strings.TrimPrefix(port, ":")
 	logger.L.Info("server starting", "port", port)
 

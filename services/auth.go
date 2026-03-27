@@ -6,36 +6,21 @@ package services
 import (
 	"database/sql"
 	"errors"
+	"os"
 	"strings"
-
-	"golang.org/x/crypto/bcrypt"
 
 	"github.com/hecker-01/kotatsu-syncserver-go/db"
 	"github.com/hecker-01/kotatsu-syncserver-go/utils"
 )
 
 var (
-	// ErrInvalidCredentials indicates login failed due to wrong email or password.
-	ErrInvalidCredentials = errors.New("invalid credentials")
-	// ErrEmailExists indicates registration failed because the email is already registered.
-	ErrEmailExists = errors.New("email already exists")
+	// ErrWrongPassword indicates authentication failed due to wrong password.
+	ErrWrongPassword = errors.New("wrong password")
 	// ErrInvalidInput indicates required fields are missing or malformed.
 	ErrInvalidInput = errors.New("invalid input")
 )
 
-// RegisterInput holds the data required to create a new user account.
-type RegisterInput struct {
-	Email    string
-	Password string
-}
-
-// LoginInput holds the data required to authenticate a user.
-type LoginInput struct {
-	Email    string
-	Password string
-}
-
-// AuthService handles user registration and login operations.
+// AuthService handles user authentication (combined login/register).
 type AuthService struct{}
 
 // NewAuthService creates a new auth service instance.
@@ -43,52 +28,72 @@ func NewAuthService() *AuthService {
 	return &AuthService{}
 }
 
-// Register creates a new user account with the provided email and password.
-// Passwords are hashed with bcrypt before storage.
-// Returns ErrInvalidInput if email/password are empty, ErrEmailExists if email is taken.
-func (s *AuthService) Register(input RegisterInput) error {
-	if strings.TrimSpace(input.Email) == "" || strings.TrimSpace(input.Password) == "" {
-		return ErrInvalidInput
+// allowNewRegister returns true if ALLOW_NEW_REGISTER is not set or set to "true".
+func allowNewRegister() bool {
+	val := os.Getenv("ALLOW_NEW_REGISTER")
+	if val == "" {
+		return true // default to true
 	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
-
-	_, err = db.DB.Exec("INSERT INTO users (email, password_hash) VALUES (?, ?)", input.Email, string(hash))
-	if err != nil {
-		return ErrEmailExists
-	}
-
-	return nil
+	return strings.ToLower(val) == "true"
 }
 
-// Login authenticates a user and returns a JWT token and user ID.
-// Returns ErrInvalidInput if email/password are empty, ErrInvalidCredentials if auth fails.
-func (s *AuthService) Login(input LoginInput) (string, int, error) {
-	if strings.TrimSpace(input.Email) == "" || strings.TrimSpace(input.Password) == "" {
-		return "", 0, ErrInvalidInput
+// Authenticate handles combined login/register flow.
+// If user exists: verifies password with Argon2 and returns JWT.
+// If user doesn't exist and ALLOW_NEW_REGISTER=true: creates user and returns JWT.
+// If user doesn't exist and ALLOW_NEW_REGISTER=false: returns ErrWrongPassword.
+// Password must be 2-24 characters.
+// Returns ErrInvalidInput for validation failures, ErrWrongPassword for auth failures.
+func (s *AuthService) Authenticate(email, password string) (string, error) {
+	// Validate input
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return "", ErrInvalidInput
 	}
 
-	var id int
+	// Validate password length (2-24 characters)
+	if len(password) < 2 || len(password) > 24 {
+		return "", ErrInvalidInput
+	}
+
+	// Try to find existing user
+	var id int64
 	var hash string
-	err := db.DB.QueryRow("SELECT id, password_hash FROM users WHERE email = ?", input.Email).Scan(&id, &hash)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", 0, ErrInvalidCredentials
+	err := db.DB.QueryRow("SELECT id, password_hash FROM users WHERE email = ?", email).Scan(&id, &hash)
+
+	if err == nil {
+		// User exists - verify password
+		if !utils.VerifyPassword(password, hash) {
+			return "", ErrWrongPassword
 		}
-		return "", 0, err
+		return utils.GenerateJWT(id)
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(input.Password)); err != nil {
-		return "", 0, ErrInvalidCredentials
+	if !errors.Is(err, sql.ErrNoRows) {
+		// Database error
+		return "", err
 	}
 
-	tokenString, err := utils.GenerateJWT(id)
+	// User doesn't exist - check if registration is allowed
+	if !allowNewRegister() {
+		return "", ErrWrongPassword
+	}
+
+	// Create new user with Argon2 hashed password
+	hashedPassword, err := utils.HashPassword(password)
 	if err != nil {
-		return "", 0, err
+		return "", err
 	}
 
-	return tokenString, id, nil
+	result, err := db.DB.Exec("INSERT INTO users (email, password_hash) VALUES (?, ?)", email, hashedPassword)
+	if err != nil {
+		// Could be a race condition where user was created between check and insert
+		return "", ErrWrongPassword
+	}
+
+	newID, err := result.LastInsertId()
+	if err != nil {
+		return "", err
+	}
+
+	return utils.GenerateJWT(newID)
 }

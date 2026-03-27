@@ -14,25 +14,26 @@ import (
 // DB is the global database connection pool used by services.
 var DB *sql.DB
 
-func getEnv(key string) string {
-	return os.Getenv(key)
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }
 
 // Init establishes the database connection using environment variables
-// (DB_HOST, DB_NAME, DB_USER, DB_PASS, DB_PORT) and configures the connection pool.
+// (DATABASE_HOST, DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD, DATABASE_PORT)
+// and configures the connection pool.
 // Exits with code 1 if connection fails or required variables are missing.
 func Init() {
-	host := getEnv("DB_HOST")
-	name := getEnv("DB_NAME")
-	user := getEnv("DB_USER")
-	pass := getEnv("DB_PASS")
-	port := getEnv("DB_PORT")
-	if port == "" {
-		port = "3306"
-	}
+	host := getEnvOrDefault("DATABASE_HOST", "localhost")
+	name := getEnvOrDefault("DATABASE_NAME", "kotatsu_db")
+	user := os.Getenv("DATABASE_USER")
+	pass := os.Getenv("DATABASE_PASSWORD")
+	port := getEnvOrDefault("DATABASE_PORT", "3306")
 
-	if host == "" || name == "" || user == "" || pass == "" {
-		logger.Error("DB_HOST, DB_NAME, DB_USER, and DB_PASS must be set")
+	if user == "" || pass == "" {
+		logger.Error("DATABASE_USER and DATABASE_PASSWORD must be set")
 		os.Exit(1)
 	}
 

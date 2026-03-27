@@ -18,7 +18,7 @@ func NewUserController() *UserController {
 	return &UserController{userService: services.NewUserService()}
 }
 
-// Me handles GET /api/users/me. Returns the authenticated user's ID from context.
+// Me handles GET /api/users/me. Returns the authenticated user's profile.
 // Requires authentication middleware.
 func (c *UserController) Me(w http.ResponseWriter, r *http.Request) {
 	userID, err := c.userService.CurrentUserID(r.Context())
@@ -31,5 +31,15 @@ func (c *UserController) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusOK, map[string]interface{}{"user_id": userID})
+	user, err := c.userService.GetUserByID(userID)
+	if err != nil {
+		if errors.Is(err, services.ErrNotFound) {
+			utils.WriteError(w, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
+		utils.WriteError(w, http.StatusInternalServerError, "Server error")
+		return
+	}
+
+	utils.WriteJSON(w, http.StatusOK, user)
 }

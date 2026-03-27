@@ -10,10 +10,53 @@ import (
 	"github.com/hecker-01/kotatsu-syncserver-go/utils"
 )
 
+// Rate limit configuration constants matching Kotatsu API groups.
+const (
+	// GlobalAPILimit is the standard rate limit for general API endpoints.
+	GlobalAPILimit = 100
+	// GlobalAPIWindow is the time window for the global API rate limit.
+	GlobalAPIWindow = 5 * time.Minute
+
+	// AuthLimit is the rate limit for authentication endpoints.
+	AuthLimit = 5
+	// AuthWindow is the time window for the auth rate limit.
+	AuthWindow = 5 * time.Minute
+
+	// ForgotPasswordLimit is the rate limit for forgot password endpoint.
+	ForgotPasswordLimit = 3
+	// ForgotPasswordWindow is the time window for forgot password rate limit.
+	ForgotPasswordWindow = 15 * time.Minute
+
+	// ResetPasswordLimit is the rate limit for reset password endpoint.
+	ResetPasswordLimit = 3
+	// ResetPasswordWindow is the time window for reset password rate limit.
+	ResetPasswordWindow = 15 * time.Minute
+)
+
 // rateLimitEntry tracks request count and reset time for an IP address.
 type rateLimitEntry struct {
 	count   int
 	resetAt time.Time
+}
+
+// GlobalAPILimiter returns middleware for standard API rate limiting (100 req/5min).
+func GlobalAPILimiter() func(http.Handler) http.Handler {
+	return NewRateLimiter(GlobalAPILimit, GlobalAPIWindow)
+}
+
+// AuthLimiter returns middleware for authentication rate limiting (5 req/5min).
+func AuthLimiter() func(http.Handler) http.Handler {
+	return NewRateLimiter(AuthLimit, AuthWindow)
+}
+
+// ForgotPasswordLimiter returns middleware for forgot password rate limiting (3 req/15min).
+func ForgotPasswordLimiter() func(http.Handler) http.Handler {
+	return NewRateLimiter(ForgotPasswordLimit, ForgotPasswordWindow)
+}
+
+// ResetPasswordLimiter returns middleware for reset password rate limiting (3 req/15min).
+func ResetPasswordLimiter() func(http.Handler) http.Handler {
+	return NewRateLimiter(ResetPasswordLimit, ResetPasswordWindow)
 }
 
 // NewRateLimiter creates middleware that limits requests per IP address.

@@ -1,82 +1,96 @@
-# Kotatsu Sync Server
+# Kotatsu Sync Server (Go)
 
-A high-performance HTTP API server written in Go for managing user authentication and synchronization data. Built with `chi` router and MySQL, featuring JWT authentication, structured logging, and rate limiting.
+A Go implementation of the Kotatsu manga reader sync server. This is a port of the original [Kotatsu Sync Server](https://github.com/KotatsuApp/kotatsu-sync-server) (Kotlin/Ktor) to Go, providing synchronization capabilities for the [Kotatsu](https://github.com/KotatsuApp/Kotatsu) manga reader application.
 
 ## Features
 
-- **JWT Authentication** - Secure user registration and login with bcrypt password hashing
-- **Layered Architecture** - Clean separation of concerns with controllers, services, and handlers
-- **Structured Logging** - Comprehensive logging with configurable levels, formats (JSON/text), and file rotation
-- **Rate Limiting** - IP-based rate limiting with separate limits for auth endpoints
-- **MySQL Database** - Connection pooling and efficient database access
+- **User Authentication** - JWT-based authentication with 30-day token expiration
+- **Password Reset** - Email-based password reset with configurable SMTP or console provider
+- **Manga Library Sync** - Synchronize favourites with category support across devices
+- **Reading History Sync** - Track and sync reading progress across devices
+- **Rate Limiting** - IP-based rate limiting with stricter limits on auth endpoints
+- **Argon2 Password Hashing** - Secure password storage using Argon2id
+- **Structured Logging** - Comprehensive logging with configurable levels, formats, and file rotation
 - **Docker Support** - Multi-stage Docker builds for production deployment
 
-## Prerequisites
+## Requirements
 
-- **Go 1.25+**
+- **Go 1.21+**
 - **MySQL 5.7+** or **MariaDB 10.3+**
 - **Docker** (optional, for containerized deployment)
 
-## Installation
+## Quick Start
 
-1. Clone the repository:
 ```bash
-git clone https://github.com/hecker-01/kotatsu-syncserver-go.git
+# Clone the repository
+git clone https://github.com/KotatsuApp/kotatsu-syncserver-go.git
 cd kotatsu-syncserver-go
-```
 
-2. Install dependencies:
-```bash
-go mod download
-```
-
-3. Set up the database:
-```bash
-mysql -u root -p < setup.sql
-```
-
-4. Configure environment variables:
-```bash
+# Configure environment
 cp .env.example .env
 # Edit .env with your database credentials and JWT secret
+
+# Setup database (choose one method):
+
+# Method 1: Manual setup (traditional)
+mysql -u root -p < setup.sql
+
+# Method 2: Automatic setup (Docker Compose friendly)
+# Set DATABASE_ROOT_PASSWORD in .env, then just run the server
+# The database will be created automatically on first run
+
+# Run the server
+go run main.go
 ```
 
-## Configuration
+The server will start on `http://localhost:9292` (or the port specified in your `.env`).
 
-Create a `.env` file in the project root with the following variables:
+## Environment Variables
+
+Create a `.env` file in the project root:
+- For **local development**: Copy `.env.example` 
+- For **Docker Compose**: Copy `.env.docker.example` (has better defaults for containers)
+
+Both files have the same variables, just different default values and comments.
 
 ### Required Variables
 
-```env
-# Database connection
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_NAME=kotatsugo
-DB_USER=kotatsugo
-DB_PASS=your_secure_password
-
-# JWT authentication (use a long random string)
-JWT_SECRET=your_jwt_secret_key_here
-```
+| Variable            | Description                                               |
+| ------------------- | --------------------------------------------------------- |
+| `DATABASE_HOST`     | Database server hostname (default: `localhost`)           |
+| `DATABASE_PORT`     | Database server port (default: `3306`)                    |
+| `DATABASE_NAME`     | Database name (default: `kotatsu_db`)                     |
+| `DATABASE_USER`     | Database username                                         |
+| `DATABASE_PASSWORD` | Database password                                         |
+| `JWT_SECRET`        | HMAC256 secret for JWT signing (use a long random string) |
 
 ### Optional Variables
 
-```env
-# Server configuration
-PORT=9292
+| Variable                 | Default                 | Description                                                                                                            |
+| ------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_ROOT_PASSWORD` | -                       | MySQL root password. If set, server auto-creates database, user (from DATABASE_USER/PASSWORD), and tables on first run |
+| `PORT`                   | `9292`                  | HTTP port the server listens on                                                                                        |
+| `ALLOW_NEW_REGISTER`     | `true`                  | Enable/disable new user registration                                                                                   |
+| `BASE_URL`               | `http://localhost:9292` | Base URL for email links                                                                                               |
+| `MAIL_PROVIDER`          | `console`               | Mail provider: `console` (logs) or `smtp`                                                                              |
+| `SMTP_HOST`              | -                       | SMTP server hostname                                                                                                   |
+| `SMTP_PORT`              | `587`                   | SMTP server port                                                                                                       |
+| `SMTP_USERNAME`          | -                       | SMTP authentication username                                                                                           |
+| `SMTP_PASSWORD`          | -                       | SMTP authentication password                                                                                           |
+| `SMTP_FROM`              | -                       | From email address for outgoing mail                                                                                   |
 
-# Logging configuration
-LOG_LEVEL=info              # Options: trace, debug, info, warn, error, fatal
-LOG_FORMAT=text             # Options: text, json
-LOG_DIRECTORY=logs
-LOG_MAX_FILE_SIZE=20m       # Max size per log file
-LOG_MAX_FILES=14            # Number of backup files to keep
+### Logging Variables
 
-# Enable/disable logging outputs
-ENABLE_FILE_LOGGING=true
-ENABLE_CONSOLE_LOGGING=true
-ENABLE_ACCESS_FILE_LOGGING=true
-```
+| Variable                     | Default | Description                                                   |
+| ---------------------------- | ------- | ------------------------------------------------------------- |
+| `LOG_LEVEL`                  | `info`  | Log level: `trace`, `debug`, `info`, `warn`, `error`, `fatal` |
+| `LOG_FORMAT`                 | `text`  | Log format: `text` (with colors) or `json`                    |
+| `LOG_DIRECTORY`              | `logs`  | Directory for log files                                       |
+| `LOG_MAX_FILE_SIZE`          | `20m`   | Maximum size per log file                                     |
+| `LOG_MAX_FILES`              | `14`    | Number of backup log files to keep                            |
+| `ENABLE_FILE_LOGGING`        | `true`  | Enable file logging                                           |
+| `ENABLE_CONSOLE_LOGGING`     | `true`  | Enable console logging                                        |
+| `ENABLE_ACCESS_FILE_LOGGING` | `true`  | Enable HTTP access file logging                               |
 
 ## Running the Server
 
@@ -86,9 +100,7 @@ ENABLE_ACCESS_FILE_LOGGING=true
 go run main.go
 ```
 
-The server will start on `http://localhost:9292` (or the port specified in your `.env`).
-
-### Production
+### Production Build
 
 ```bash
 go build -o kotatsu-server .
@@ -99,130 +111,100 @@ go build -o kotatsu-server .
 
 ```bash
 # Build the image
-docker build -t kotatsu-syncserver .
+docker build -t kotatsu-syncserver-go .
 
 # Run the container
+docker run -p 9292:9292 --env-file .env kotatsu-syncserver-go
+
+# Or with individual environment variables
 docker run -p 9292:9292 \
-  -e DB_HOST=your_db_host \
-  -e DB_NAME=kotatsugo \
-  -e DB_USER=kotatsugo \
-  -e DB_PASS=your_password \
+  -e DATABASE_HOST=your_db_host \
+  -e DATABASE_NAME=kotatsu_db \
+  -e DATABASE_USER=kotatsu \
+  -e DATABASE_PASSWORD=your_password \
   -e JWT_SECRET=your_secret \
-  kotatsu-syncserver
+  kotatsu-syncserver-go
 ```
+
+### Docker Compose (Recommended)
+
+The easiest way to run the server with MySQL:
+
+```bash
+# 1. Copy the Docker Compose environment file
+cp .env.docker.example .env
+
+# 2. Edit .env and set secure passwords and JWT secret
+#    IMPORTANT: Change these values in production!
+#    - DATABASE_PASSWORD
+#    - DATABASE_ROOT_PASSWORD
+#    - JWT_SECRET (generate with: openssl rand -base64 32)
+
+# 3. Start both MySQL and the server
+docker-compose up -d
+
+# The database will be automatically created on first run
+# No manual setup.sql execution needed!
+
+# View logs
+docker-compose logs -f kotatsu-server
+
+# Stop services
+docker-compose down
+
+# Stop and remove data
+docker-compose down -v
+```
+
+**Security Note**: The `docker-compose.yml` reads sensitive information from your `.env` file. Never commit your `.env` file to version control - it's already in `.gitignore`.
 
 ## API Endpoints
 
 ### Health Check
 
-```http
-GET /
-GET /health
-```
-
-Returns server status.
+| Method | Endpoint | Description     |
+| ------ | -------- | --------------- |
+| `GET`  | `/`      | Returns "Alive" |
 
 ### Authentication
 
-All authentication endpoints are rate-limited to 5 requests per 5 minutes per IP.
+| Method | Endpoint           | Description               | Rate Limit |
+| ------ | ------------------ | ------------------------- | ---------- |
+| `POST` | `/auth`            | Login or register         | 5 req/5min |
+| `POST` | `/forgot-password` | Request password reset    | 3 req/5min |
+| `POST` | `/reset-password`  | Reset password with token | 5 req/5min |
 
-#### Register
+### Deeplink
 
-```http
-POST /api/auth/register
-Content-Type: application/json
+| Method | Endpoint                             | Description                      |
+| ------ | ------------------------------------ | -------------------------------- |
+| `GET`  | `/deeplink/reset-password?token=...` | HTML page with Kotatsu deep link |
 
-{
-  "email": "user@example.com",
-  "password": "securepassword"
-}
-```
+### User (Protected)
 
-**Response:** `201 Created`
-```json
-{
-  "message": "User created"
-}
-```
+All endpoints below require `Authorization: Bearer <token>` header.
 
-#### Login
+| Method | Endpoint | Description              |
+| ------ | -------- | ------------------------ |
+| `GET`  | `/me`    | Get current user profile |
 
-```http
-POST /api/auth/login
-Content-Type: application/json
+### Manga (Public)
 
-{
-  "email": "user@example.com",
-  "password": "securepassword"
-}
-```
+| Method | Endpoint                   | Description                |
+| ------ | -------------------------- | -------------------------- |
+| `GET`  | `/manga?offset=0&limit=20` | List manga with pagination |
+| `GET`  | `/manga/{id}`              | Get single manga by ID     |
 
-**Response:** `200 OK`
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-```
+### Sync Resources (Protected)
 
-### Protected Endpoints
+| Method | Endpoint               | Description                          |
+| ------ | ---------------------- | ------------------------------------ |
+| `GET`  | `/resource/favourites` | Get favourites and categories        |
+| `POST` | `/resource/favourites` | Sync favourites (returns 204 or 200) |
+| `GET`  | `/resource/history`    | Get reading history                  |
+| `POST` | `/resource/history`    | Sync history (returns 204 or 200)    |
 
-All endpoints below require authentication via Bearer token:
-
-```http
-Authorization: Bearer <your_jwt_token>
-```
-
-#### Get Current User
-
-```http
-GET /api/users/me
-```
-
-**Response:** `200 OK`
-```json
-{
-  "user_id": 1
-}
-```
-
-#### List Games
-
-```http
-GET /api/games
-```
-
-**Response:** `200 OK`
-```json
-{
-  "data": []
-}
-```
-
-#### List Player Data
-
-```http
-GET /api/player
-```
-
-**Response:** `200 OK`
-```json
-{
-  "data": []
-}
-```
-
-#### List History
-
-```http
-GET /api/history
-```
-
-**Response:** `200 OK`
-```json
-{
-  "data": []
-}
-```
+For detailed API documentation, see [API_DOCUMENTATION.md](API_DOCUMENTATION.md).
 
 ## Development
 
@@ -238,7 +220,7 @@ GET /api/history
 ├── db/                    # Database initialization
 ├── logger/                # Structured logging implementation
 ├── utils/                 # JWT, context, and response utilities
-├── handlers/              # Legacy handlers (deprecated)
+├── models/                # Data models and DTOs
 ├── setup.sql              # Database schema
 └── .env.example           # Environment variable template
 ```
@@ -285,7 +267,7 @@ This server follows a layered architecture pattern:
 
 ### Authentication Flow
 
-1. User registers or logs in via `/api/auth/register` or `/api/auth/login`
+1. User registers or logs in via `POST /auth`
 2. `services.AuthService` validates credentials and generates a JWT via `utils.GenerateJWT`
 3. Client includes JWT in `Authorization: Bearer <token>` header for protected routes
 4. `middleware.RequireAuth` validates the token and injects `user_id` into request context
@@ -308,14 +290,15 @@ The server uses structured logging with the following features:
 - **Contextual logging:** Structured key-value pairs for easy filtering
 
 Log files are written to the `logs/` directory:
+
 - `combined.log` - All log levels
 - `error.log` - Error and fatal logs only
 - `access.log` - HTTP access logs
 
 ## License
 
-[Specify your license here]
+MIT License - see [LICENSE](LICENSE) for details.
 
 ## Contributing
 
-[Add contribution guidelines here]
+Contributions are welcome! Please feel free to submit a Pull Request.
