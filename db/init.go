@@ -51,47 +51,51 @@ func InitializeDatabase(cfg *utils.Config) (bool, error) {
 	// Check if database exists
 	var dbName string
 	err = rootDB.QueryRow("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = ?", cfg.DatabaseName).Scan(&dbName)
-	if err == nil {
-		// Database exists
-		logger.L.Info("database already exists", "database", cfg.DatabaseName)
-		return false, nil
-	}
-	if err != sql.ErrNoRows {
+	dbExists := err == nil
+	
+	if err != nil && err != sql.ErrNoRows {
 		return false, fmt.Errorf("failed to check database existence: %w", err)
 	}
 
-	// Database doesn't exist, create it and the user
-	logger.L.Info("database not found, creating database and user", "database", cfg.DatabaseName)
+	// If database doesn't exist, create it, user, and tables
+	if !dbExists {
+		logger.L.Info("database not found, creating database and user", "database", cfg.DatabaseName)
 
-	// Create database
-	if _, err := rootDB.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", cfg.DatabaseName)); err != nil {
-		return false, fmt.Errorf("failed to create database: %w", err)
-	}
-	logger.L.Info("database created", "database", cfg.DatabaseName)
+		// Create database
+		if _, err := rootDB.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", cfg.DatabaseName)); err != nil {
+			return false, fmt.Errorf("failed to create database: %w", err)
+		}
+		logger.L.Info("database created", "database", cfg.DatabaseName)
 
-	// Create user if not exists (MySQL 5.7+ syntax)
-	createUserSQL := fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%%' IDENTIFIED BY '%s'",
-		cfg.DatabaseUser,
-		cfg.DatabasePassword,
-	)
-	if _, err := rootDB.Exec(createUserSQL); err != nil {
-		return false, fmt.Errorf("failed to create user: %w", err)
-	}
-	logger.L.Info("database user created", "user", cfg.DatabaseUser)
+		// Create user if not exists (MySQL 5.7+ syntax)
+		createUserSQL := fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%%' IDENTIFIED BY '%s'",
+			cfg.DatabaseUser,
+			cfg.DatabasePassword,
+		)
+		if _, err := rootDB.Exec(createUserSQL); err != nil {
+			return false, fmt.Errorf("failed to create user: %w", err)
+		}
+		logger.L.Info("database user created", "user", cfg.DatabaseUser)
 
-	// Grant privileges
-	grantSQL := fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'%%'",
-		cfg.DatabaseName,
-		cfg.DatabaseUser,
-	)
-	if _, err := rootDB.Exec(grantSQL); err != nil {
-		return false, fmt.Errorf("failed to grant privileges: %w", err)
+		// Grant privileges
+		grantSQL := fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'%%'",
+			cfg.DatabaseName,
+			cfg.DatabaseUser,
+		)
+		if _, err := rootDB.Exec(grantSQL); err != nil {
+			return false, fmt.Errorf("failed to grant privileges: %w", err)
+		}
+
+		if _, err := rootDB.Exec("FLUSH PRIVILEGES"); err != nil {
+			return false, fmt.Errorf("failed to flush privileges: %w", err)
+		}
+		logger.L.Info("privileges granted", "user", cfg.DatabaseUser)
+	} else {
+		logger.L.Info("database already exists", "database", cfg.DatabaseName)
 	}
 
-	if _, err := rootDB.Exec("FLUSH PRIVILEGES"); err != nil {
-		return false, fmt.Errorf("failed to flush privileges: %w", err)
-	}
-	logger.L.Info("privileges granted", "user", cfg.DatabaseUser)
+	// Always ensure tables exist (reads and executes setup.sql)
+	logger.L.Debug("checking if tables need to be created")
 
 	// Now read setup.sql and execute table creation (skip DB/user creation)
 	setupSQL, err := os.ReadFile("setup.sql")

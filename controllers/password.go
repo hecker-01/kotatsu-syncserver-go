@@ -22,9 +22,18 @@ type PasswordController struct {
 // NewPasswordController creates a new password controller with initialized services.
 func NewPasswordController() *PasswordController {
 	cfg, _ := utils.LoadConfig()
+	
+	// Handle nil config gracefully (e.g., in tests)
+	var mailService services.MailService
+	if cfg != nil {
+		mailService = services.NewMailService(cfg)
+	} else {
+		mailService = services.NewConsoleMailService()
+	}
+	
 	return &PasswordController{
 		passwordResetService: services.NewPasswordResetService(),
-		mailService:          services.NewMailService(cfg),
+		mailService:          mailService,
 		config:               cfg,
 	}
 }
