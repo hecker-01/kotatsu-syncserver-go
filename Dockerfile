@@ -13,6 +13,7 @@ FROM alpine:3.19
 
 WORKDIR /app
 COPY --from=builder /app/api .
+COPY setup.sql .
 
 EXPOSE 9292
 CMD ["./api"]
