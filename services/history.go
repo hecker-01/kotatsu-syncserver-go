@@ -144,7 +144,7 @@ func (s *HistoryService) SyncHistory(userID int64, clientPkg *models.HistoryPack
 		serverRecord, exists := serverHistory[clientRecord.MangaID]
 
 		if !exists {
-			// New record from client - insert it
+			// New record from client - insert it (use ON DUPLICATE KEY UPDATE for idempotency)
 			deletedAt := int64(0)
 			if clientRecord.DeletedAt != nil {
 				deletedAt = *clientRecord.DeletedAt
@@ -152,6 +152,15 @@ func (s *HistoryService) SyncHistory(userID int64, clientPkg *models.HistoryPack
 			_, err = tx.Exec(`
 				INSERT INTO history (user_id, manga_id, created_at, updated_at, chapter_id, page, scroll, percent, chapters, deleted_at)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				ON DUPLICATE KEY UPDATE
+					created_at = VALUES(created_at),
+					updated_at = VALUES(updated_at),
+					chapter_id = VALUES(chapter_id),
+					page = VALUES(page),
+					scroll = VALUES(scroll),
+					percent = VALUES(percent),
+					chapters = VALUES(chapters),
+					deleted_at = VALUES(deleted_at)
 			`, userID, clientRecord.MangaID, clientRecord.CreatedAt, clientRecord.UpdatedAt,
 				clientRecord.ChapterID, clientRecord.Page, clientRecord.Scroll, clientRecord.Percent,
 				clientRecord.Chapters, deletedAt)
