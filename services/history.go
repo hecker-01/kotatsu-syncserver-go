@@ -76,16 +76,16 @@ func (s *HistoryService) GetHistory(userID int64) (*models.HistoryPackage, error
 // Returns the merged package with server-newer records, hasChanges bool, and error.
 // hasChanges=false means client is up-to-date (return 204).
 func (s *HistoryService) SyncHistory(userID int64, clientPkg *models.HistoryPackage) (*models.HistoryPackage, bool, error) {
-	// Start a transaction with READ COMMITTED isolation
+	// Start a transaction
 	tx, err := db.DB.Begin()
 	if err != nil {
 		return nil, false, err
 	}
 	defer tx.Rollback()
 
-	// Set transaction isolation level
-	_, err = tx.Exec("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
-	if err != nil {
+	// Ensure all manga IDs exist before processing history records
+	// to satisfy foreign key constraint
+	if err := s.ensureMangaExist(tx, clientPkg.History); err != nil {
 		return nil, false, err
 	}
 
@@ -218,4 +218,43 @@ func (s *HistoryService) SyncHistory(userID int64, clientPkg *models.HistoryPack
 		History:   newerOnServer,
 		Timestamp: &newTimestamp,
 	}, true, nil
+}
+
+// ensureMangaExist ensures all manga IDs in history records exist in the manga table
+// by creating placeholder records if necessary (to satisfy foreign key constraint).
+func (s *HistoryService) ensureMangaExist(tx *sql.Tx, history []models.History) error {
+	if len(history) == 0 {
+		return nil
+	}
+
+	// Collect unique manga IDs from history
+	mangaIDsToCheck := make(map[int64]bool)
+	for _, h := range history {
+		if !mangaIDsToCheck[h.MangaID] {
+			mangaIDsToCheck[h.MangaID] = true
+		}
+	}
+
+	// Check which manga IDs are missing and create placeholders if needed
+	for mangaID := range mangaIDsToCheck {
+		var exists int
+		err := tx.QueryRow("SELECT 1 FROM manga WHERE id = ?", mangaID).Scan(&exists)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				// Manga doesn't exist, create a placeholder record
+				// Use INSERT IGNORE to handle race conditions if multiple requests try to insert the same ID
+				_, insertErr := tx.Exec(`
+					INSERT IGNORE INTO manga (id, title, url, public_url, rating, cover_url, source)
+					VALUES (?, ?, ?, ?, ?, ?, ?)
+				`, mangaID, "Unknown Manga", "http://unknown", "http://unknown", 0.0, "http://unknown", "unknown")
+				if insertErr != nil {
+					return insertErr
+				}
+			} else {
+				return err
+			}
+		}
+	}
+
+	return nil
 }

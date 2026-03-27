@@ -302,9 +302,41 @@ func (s *FavouritesService) upsertCategories(tx *sql.Tx, userID int64, categorie
 }
 
 // upsertFavourites inserts or updates favourites within a transaction.
+// Before inserting favourites, ensures that all manga IDs exist in the manga table
+// by creating placeholder records if necessary (to satisfy the foreign key constraint).
 func (s *FavouritesService) upsertFavourites(tx *sql.Tx, userID int64, favourites []models.Favourite) error {
 	if len(favourites) == 0 {
 		return nil
+	}
+
+	// First, ensure all manga IDs exist in the manga table
+	// Collect unique manga IDs from favourites
+	mangaIDsToCheck := make(map[int64]bool)
+	for _, f := range favourites {
+		if !mangaIDsToCheck[f.MangaID] {
+			mangaIDsToCheck[f.MangaID] = true
+		}
+	}
+
+	// Check which manga IDs are missing
+	for mangaID := range mangaIDsToCheck {
+		var exists int
+		err := tx.QueryRow("SELECT 1 FROM manga WHERE id = ?", mangaID).Scan(&exists)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				// Manga doesn't exist, create a placeholder record
+				// Use INSERT IGNORE to handle race conditions if multiple requests try to insert the same ID
+				_, insertErr := tx.Exec(`
+					INSERT IGNORE INTO manga (id, title, url, public_url, rating, cover_url, source)
+					VALUES (?, ?, ?, ?, ?, ?, ?)
+				`, mangaID, "Unknown Manga", "http://unknown", "http://unknown", 0.0, "http://unknown", "unknown")
+				if insertErr != nil {
+					return insertErr
+				}
+			} else {
+				return err
+			}
+		}
 	}
 
 	stmt, err := tx.Prepare(`
