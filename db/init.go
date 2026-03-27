@@ -103,10 +103,15 @@ func InitializeDatabase(cfg *utils.Config) (bool, error) {
 		return false, fmt.Errorf("failed to read setup.sql: %w", err)
 	}
 
+	// First, select the database for all following statements
+	if _, err := rootDB.Exec(fmt.Sprintf("USE `%s`", cfg.DatabaseName)); err != nil {
+		return false, fmt.Errorf("failed to select database: %w", err)
+	}
+
 	// Split into individual statements
 	statements := splitSQLStatements(string(setupSQL))
 
-	// Execute each statement, skipping CREATE DATABASE, CREATE USER, GRANT, FLUSH
+	// Execute each statement, skipping CREATE DATABASE, CREATE USER, GRANT, FLUSH, USE
 	for i, stmt := range statements {
 		stmt = strings.TrimSpace(stmt)
 		if stmt == "" || strings.HasPrefix(stmt, "--") {
@@ -118,7 +123,8 @@ func InitializeDatabase(cfg *utils.Config) (bool, error) {
 		if strings.HasPrefix(stmtUpper, "CREATE DATABASE") ||
 			strings.HasPrefix(stmtUpper, "CREATE USER") ||
 			strings.HasPrefix(stmtUpper, "GRANT ") ||
-			strings.HasPrefix(stmtUpper, "FLUSH PRIVILEGES") {
+			strings.HasPrefix(stmtUpper, "FLUSH PRIVILEGES") ||
+			strings.HasPrefix(stmtUpper, "USE ") {
 			logger.L.Debug("skipping already-handled statement", "index", i+1)
 			continue
 		}
@@ -126,6 +132,11 @@ func InitializeDatabase(cfg *utils.Config) (bool, error) {
 		logger.L.Debug("executing SQL statement", "index", i+1, "statement", truncate(stmt, 100))
 		
 		if _, err := rootDB.Exec(stmt); err != nil {
+			// Only log table already exists errors as info, other errors as failures
+			if strings.Contains(err.Error(), "already exists") {
+				logger.L.Debug("table or key already exists", "index", i+1)
+				continue
+			}
 			return false, fmt.Errorf("failed to execute statement %d: %w\nStatement: %s", i+1, err, stmt)
 		}
 	}
