@@ -158,6 +158,40 @@ docker-compose down -v
 
 **Security Note**: The `docker-compose.yml` reads sensitive information from your `.env` file. Never commit your `.env` file to version control - it's already in `.gitignore`.
 
+### Troubleshooting Docker Compose
+
+**If you see "failed to initialize database" errors:**
+
+1. **Check the detailed error message** - Now logs include the actual error
+   ```bash
+   docker-compose logs kotatsu-server
+   ```
+
+2. **Common issues:**
+   - **Can't connect to MySQL**: Wait for MySQL to fully start (healthcheck should handle this, but sometimes takes 30-60s on first run)
+   - **Wrong root password**: Make sure `DATABASE_ROOT_PASSWORD` in `.env` matches
+   - **Port already in use**: Change `DATABASE_PORT` or `PORT` in `.env`
+   
+3. **Fresh start:**
+   ```bash
+   # Stop and remove everything including volumes
+   docker-compose down -v
+   
+   # Verify .env has correct values
+   cat .env | grep PASSWORD
+   
+   # Start fresh
+   docker-compose up -d
+   
+   # Watch logs
+   docker-compose logs -f
+   ```
+
+4. **Check MySQL logs:**
+   ```bash
+   docker-compose logs mysql
+   ```
+
 ## API Endpoints
 
 ### Health Check

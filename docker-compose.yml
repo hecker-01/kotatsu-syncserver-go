@@ -1,40 +1,45 @@
-version: '3.8'
+networks:
+  kotatsu-syncserver-go:
+    external: false
 
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: kotatsu-mysql
+  db:
+    image: mariadb:11.8
     env_file:
       - .env
     environment:
-      # MySQL-specific environment variables
+      # MariaDB-specific environment variables
       MYSQL_ROOT_PASSWORD: ${DATABASE_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${DATABASE_NAME:-kotatsu_db}
       MYSQL_USER: ${DATABASE_USER}
       MYSQL_PASSWORD: ${DATABASE_PASSWORD}
-    ports:
-      - "${DATABASE_PORT:-3306}:3306"
+      MYSQL_DATABASE: ${DATABASE_NAME:-kotatsu_db}
+    restart: unless-stopped
+    networks:
+      - kotatsu-syncserver-go
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     volumes:
       - mysql_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DATABASE_ROOT_PASSWORD}"]
-      timeout: 5s
-      retries: 10
 
-  kotatsu-server:
-    build: .
-    container_name: kotatsu-server
-    depends_on:
-      mysql:
-        condition: service_healthy
-    ports:
-      - "${PORT:-9292}:${PORT:-9292}"
+  server:
+    container_name: kotatsu-sync-go
+    image: bittr.dev/hecker-01/kotatsu-syncserver-go:latest
     env_file:
       - .env
     environment:
       # Override DATABASE_HOST for container networking
-      DATABASE_HOST: mysql
+      DATABASE_HOST: db
     restart: unless-stopped
+    networks:
+      - kotatsu-syncserver-go
+    ports:
+      - "${PORT:-9292}:${PORT:-9292}"
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   mysql_data:

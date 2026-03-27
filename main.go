@@ -36,7 +36,7 @@ func main() {
 	// Auto-initialize database if DATABASE_ROOT_PASSWORD is set
 	// This is useful for Docker Compose where database should be created automatically
 	if created, err := db.InitializeDatabase(cfg); err != nil {
-		logger.L.Error("failed to initialize database", "error", err)
+		logger.L.Error("failed to initialize database", "error", err.Error())
 		os.Exit(1)
 	} else if created {
 		logger.L.Info("database created successfully")

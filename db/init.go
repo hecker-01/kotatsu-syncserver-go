@@ -18,10 +18,14 @@ import (
 func InitializeDatabase(cfg *utils.Config) (bool, error) {
 	// Skip if no root password provided
 	if cfg.DatabaseRootPassword == "" {
+		logger.L.Debug("skipping database initialization - no root password provided")
 		return false, nil
 	}
 
-	logger.L.Info("checking if database needs initialization", "database", cfg.DatabaseName)
+	logger.L.Info("checking if database needs initialization", 
+		"database", cfg.DatabaseName,
+		"host", cfg.DatabaseHost,
+		"port", cfg.DatabasePort)
 
 	// Connect to MySQL as root (without specifying database)
 	dsn := fmt.Sprintf("root:%s@tcp(%s:%d)/",
@@ -30,6 +34,7 @@ func InitializeDatabase(cfg *utils.Config) (bool, error) {
 		cfg.DatabasePort,
 	)
 
+	logger.L.Debug("attempting to connect to MySQL as root")
 	rootDB, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return false, fmt.Errorf("failed to connect as root: %w", err)
@@ -37,9 +42,11 @@ func InitializeDatabase(cfg *utils.Config) (bool, error) {
 	defer rootDB.Close()
 
 	// Test connection
+	logger.L.Debug("pinging MySQL server")
 	if err := rootDB.Ping(); err != nil {
-		return false, fmt.Errorf("failed to ping MySQL as root: %w", err)
+		return false, fmt.Errorf("failed to ping MySQL as root (check host/port/password): %w", err)
 	}
+	logger.L.Debug("successfully connected to MySQL as root")
 
 	// Check if database exists
 	var dbName string
